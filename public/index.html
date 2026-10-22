@@ -1,0 +1,357 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>角色生活模拟</title>
+<style>
+  :root { --paper: #f6f1e7; --card: #fffdf8; --ink: #2b2622; --muted: #857a6e; --line: #e4dccd; --accent: #9c4a2f; --accent-soft: #f1e1d6; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.6 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; color: var(--ink); background: var(--paper); height: 100vh; display: grid; grid-template-columns: 250px 1fr 320px; }
+  aside, main { overflow-y: auto; height: 100vh; }
+  aside { padding: 18px 16px; border-right: 1px solid var(--line); }
+  aside.right { border-right: 0; border-left: 1px solid var(--line); }
+  h1 { font-size: 17px; margin: 0 0 14px; }
+  h2 { font-size: 12px; letter-spacing: .08em; color: var(--muted); margin: 20px 0 8px; font-weight: 600; }
+  button { font: inherit; border: 1px solid var(--line); background: var(--card); color: var(--ink); border-radius: 6px; padding: 5px 10px; cursor: pointer; }
+  button:hover:not(:disabled) { border-color: var(--accent); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button:disabled { opacity: .45; cursor: default; }
+  input, textarea, select { font: inherit; width: 100%; border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; background: var(--card); color: var(--ink); }
+  textarea { resize: vertical; }
+  .list button { display: block; width: 100%; text-align: left; margin-bottom: 6px; padding: 7px 10px; }
+  .list button.on { border-color: var(--accent); background: var(--accent-soft); }
+  .list small { display: block; color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .chips button { padding: 2px 10px; border-radius: 999px; }
+  .chips button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  main { padding: 0 40px 80px; }
+  body:has(#panel[hidden]) main { grid-column: 2 / 4; }
+  .head { position: sticky; top: 0; background: var(--paper); padding: 18px 0 12px; border-bottom: 1px solid var(--line); z-index: 1; display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+  .head h2 { margin: 0; font-size: 20px; color: var(--ink); letter-spacing: 0; }
+  .seg { max-width: 680px; margin: 26px auto; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 20px 26px; }
+  .seg header { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+  .seg .n { color: var(--accent); font-size: 12px; font-weight: 600; }
+  .seg h3 { margin: 0; font-size: 17px; }
+  .seg time { color: var(--muted); font-size: 12px; }
+  .seg .body { font: 16px/1.95 "Songti SC", "Noto Serif SC", "STSong", serif; white-space: pre-wrap; margin: 12px 0 8px; }
+  .seg footer { font-size: 12px; color: var(--muted); border-top: 1px dashed var(--line); padding-top: 6px; }
+  .seg.live { border-style: dashed; }
+  .empty { color: var(--muted); text-align: center; margin-top: 30vh; }
+  .status { min-height: 1.6em; font-size: 13px; margin: 8px 0; }
+  .status.err { color: #b3261e; }
+  pre.notes { white-space: pre-wrap; font: 13px/1.7 inherit; background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 10px; margin: 0; color: #4a423a; }
+  .pending { font-size: 12px; background: var(--accent-soft); border-radius: 6px; padding: 4px 8px; margin-top: 6px; }
+  .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .compare .seg { margin: 16px 0; padding: 14px 18px; }
+  .compare .seg .body { font-size: 14px; }
+  dialog { border: 1px solid var(--line); border-radius: 12px; padding: 22px; width: min(520px, 92vw); background: var(--card); color: var(--ink); }
+  dialog::backdrop { background: rgba(43, 38, 34, .35); }
+  dialog label { display: block; margin: 10px 0 4px; font-size: 13px; color: var(--muted); }
+  dialog .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+</style>
+</head>
+<body>
+<aside>
+  <h1>角色生活模拟</h1>
+  <h2>角色卡</h2>
+  <div class="row">
+    <button id="importBtn">导入酒馆卡</button>
+    <button id="customBtn">自定义</button>
+    <input id="fileInput" type="file" accept=".png,.json" hidden>
+  </div>
+  <div class="list" id="cardList" style="margin-top:10px"></div>
+  <h2>故事</h2>
+  <div class="list" id="storyList"></div>
+  <button id="compareBtn" style="width:100%;margin-top:6px">对比两个故事</button>
+</aside>
+
+<main id="main"><p class="empty">选一张角色卡，开始一个故事</p></main>
+
+<aside class="right" id="panel" hidden>
+  <h2>故事走向 · 基调</h2>
+  <div class="row chips" id="toneChips"></div>
+  <input id="toneText" placeholder="一句话，比如：她慢慢学会照顾自己" style="margin-top:8px">
+  <h2>故事走向 · 事件（只管下一段）</h2>
+  <textarea id="eventText" rows="2" placeholder="接下来发生…，比如：她在地铁上遇到了前男友"></textarea>
+  <div class="row" style="margin-top:8px"><button class="primary" id="saveDir">保存走向</button><span id="dirSaved" style="color:var(--muted);font-size:12px"></span></div>
+  <div id="pendingEvent"></div>
+
+  <h2>写</h2>
+  <div class="row">
+    <button class="primary" id="nextBtn">下一段</button>
+    <button id="rewriteBtn">重写最后一段</button>
+  </div>
+  <div class="row" style="margin-top:8px">
+    连续写 <input id="batchN" type="number" min="1" max="200" value="10" style="width:70px"> 段
+    <button id="batchBtn">开始</button>
+    <button id="stopBtn" disabled>停止</button>
+  </div>
+  <div class="status" id="status"></div>
+
+  <h2>故事笔记</h2>
+  <pre class="notes" id="notes"></pre>
+</aside>
+
+<dialog id="newDlg">
+  <form method="dialog" id="newForm">
+    <h1>新故事</h1>
+    <label>角色卡</label><select name="cardId" required></select>
+    <label>文体</label>
+    <div class="row"><label style="margin:0;color:inherit"><input type="radio" name="style" value="小说" checked style="width:auto"> 小说</label>
+      <label style="margin:0;color:inherit"><input type="radio" name="style" value="日记" style="width:auto"> 日记</label></div>
+    <label>卡里的 {{user}} 叫什么（成为一个普通配角）</label><input name="userName" value="阿远" maxlength="20">
+    <label>初始基调</label><div class="row chips" id="newChips"></div>
+    <input name="toneText" placeholder="一句话（可空）" style="margin-top:8px">
+    <div class="actions"><button value="cancel" formnovalidate>取消</button><button class="primary" value="ok">开始</button></div>
+  </form>
+</dialog>
+
+<dialog id="customDlg">
+  <form method="dialog" id="customForm">
+    <h1>自定义角色卡</h1>
+    <label>名字</label><input name="name" required maxlength="30">
+    <label>描述（身份、经历、生活环境）</label><textarea name="description" rows="4" required></textarea>
+    <label>性格</label><textarea name="personality" rows="2"></textarea>
+    <label>处境（故事开始时 TA 正面对什么）</label><textarea name="scenario" rows="2"></textarea>
+    <label>说话方式示例（可空）</label><textarea name="mes_example" rows="2"></textarea>
+    <div class="actions"><button value="cancel" formnovalidate>取消</button><button class="primary" value="ok">保存</button></div>
+  </form>
+</dialog>
+
+<script>
+const TAGS = ['治愈', '虐心', '甜', '冒险', '悬疑', '日常']
+const $ = id => document.getElementById(id)
+const state = { cards: [], stories: [], story: null, writing: null, stopBatch: false, batchLabel: '' }
+
+// 用 textContent 拼 DOM：卡片内容来自外部文件，不能进 innerHTML
+function h(tag, props = {}, ...kids) {
+  const el = Object.assign(document.createElement(tag), props)
+  el.append(...kids.flat().filter(k => k != null && k !== false))
+  return el
+}
+
+async function api(url, opts = {}) {
+  const res = await fetch(url, opts)
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.error || res.statusText)
+  return data
+}
+
+const toneText = t => [t.tags.join('、'), t.text].filter(Boolean).join(' · ') || '不限'
+
+function chips(box, selected = []) {
+  box.replaceChildren(...TAGS.map(t => {
+    const b = h('button', { type: 'button', textContent: t, className: selected.includes(t) ? 'on' : '' })
+    b.onclick = () => b.classList.toggle('on')
+    return b
+  }))
+}
+const chipValues = box => [...box.querySelectorAll('button.on')].map(b => b.textContent)
+
+function setStatus(msg, err = false) {
+  $('status').textContent = msg
+  $('status').className = 'status' + (err ? ' err' : '')
+}
+
+async function refresh() {
+  ;[state.cards, state.stories] = await Promise.all([api('/api/cards'), api('/api/stories')])
+  $('cardList').replaceChildren(...state.cards.map(c => {
+    const b = h('button', {}, c.name, h('small', { textContent: c.intro }))
+    b.onclick = () => openNewDialog(c.id)
+    return b
+  }))
+  $('storyList').replaceChildren(...state.stories.map(s => {
+    const b = h('button', { className: s.id === state.story?.id ? 'on' : '' }, `${s.name} · ${s.style}`,
+      h('small', { textContent: `${s.count} 段 · ${toneText(s.tone)}` }))
+    b.onclick = () => openStory(s.id)
+    return b
+  }))
+}
+
+function segEl(s) {
+  return h('article', { className: 'seg' },
+    h('header', {}, h('span', { className: 'n', textContent: `第 ${s.n} 段` }), h('h3', { textContent: s.title }), h('time', { textContent: s.time })),
+    h('div', { className: 'body', textContent: s.body }),
+    h('footer', { textContent: `基调：${toneText(s.tone)}${s.event ? ` ｜ 事件：${s.event}` : ''}` }))
+}
+
+async function openStory(id) {
+  state.story = await api(`/api/stories/${id}`)
+  render()
+  renderDirection()
+  refresh()
+  $('main').scrollTop = $('main').scrollHeight
+}
+
+// 走向输入框单独渲染：连续写的时候每段写完都会 render()，不能冲掉观看者正在改的走向
+function renderDirection() {
+  chips($('toneChips'), state.story.tone.tags)
+  $('toneText').value = state.story.tone.text
+  $('eventText').value = ''
+}
+
+function render() {
+  const s = state.story
+  $('panel').hidden = !s
+  if (!s) return
+  $('main').replaceChildren(
+    h('div', { className: 'head' },
+      h('h2', { textContent: `${s.card.name}的生活` }),
+      h('span', { style: 'color:var(--muted)' }, `${s.style} · 共 ${s.segments.length} 段 · `,
+        h('a', { href: `/api/stories/${s.id}.md`, target: '_blank', textContent: '导出' }))),
+    ...(s.segments.length ? s.segments.map(segEl) : [h('p', { className: 'empty', textContent: '点「下一段」写开篇' })]))
+  $('pendingEvent').replaceChildren(s.event ? h('div', { className: 'pending', textContent: `下一段事件：${s.event}` }) : '')
+  $('notes').textContent = s.notes || '（写完第一段后出现）'
+  $('rewriteBtn').disabled = !s.segments.length || !!state.writing
+}
+
+// 一段：流式读 NDJSON；成功换成新故事，失败什么都不留
+async function writeOne(kind) {
+  const s = state.story
+  const ac = new AbortController()
+  state.writing = ac
+  lockButtons(true)
+  setStatus(state.batchLabel + (kind === 'rewrite' ? `正在重写第 ${s.segments.length} 段…` : `正在写第 ${s.segments.length + 1} 段…`))
+  const live = h('div', { className: 'body' })
+  const liveSeg = h('article', { className: 'seg live' }, live)
+  if (kind === 'rewrite') $('main').lastElementChild.replaceWith(liveSeg)
+  else {
+    $('main').querySelector('.empty')?.remove()
+    $('main').append(liveSeg)
+  }
+  let ok = false
+  try {
+    const res = await fetch(`/api/stories/${s.id}/${kind}`, { method: 'POST', signal: ac.signal })
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || res.statusText)
+    const reader = res.body.pipeThrough(new TextDecoderStream()).getReader()
+    let buf = ''
+    for (;;) {
+      const { value, done } = await reader.read()
+      if (done) break
+      buf += value
+      let i
+      while ((i = buf.indexOf('\n')) >= 0) {
+        const msg = JSON.parse(buf.slice(0, i))
+        buf = buf.slice(i + 1)
+        if (msg.delta) {
+          live.textContent += msg.delta
+          $('main').scrollTop = $('main').scrollHeight
+        } else if (msg.story) {
+          state.story = msg.story
+          ok = true
+          setStatus('')
+        } else if (msg.error) throw new Error(msg.error)
+      }
+    }
+    if (!ok) throw new Error('连接中断')
+  } catch (e) {
+    setStatus(ac.signal.aborted ? '已停止，这一段没有保存' : `写失败：${e.message}。可以重试`, !ac.signal.aborted)
+  } finally {
+    state.writing = null
+    lockButtons(false)
+    if (state.story?.id === s.id) render()
+    $('main').scrollTop = $('main').scrollHeight
+    refresh()
+  }
+  return ok
+}
+
+// 写的时候走向仍可保存：服务端以最新走向为准，从下一段起生效
+function lockButtons(on) {
+  for (const id of ['nextBtn', 'rewriteBtn', 'batchBtn']) $(id).disabled = on
+  $('stopBtn').disabled = !on
+}
+
+$('nextBtn').onclick = () => writeOne('next')
+$('rewriteBtn').onclick = () => writeOne('rewrite')
+$('batchBtn').onclick = async () => {
+  const n = Math.max(1, Math.min(200, Number($('batchN').value) || 1))
+  state.stopBatch = false
+  for (let i = 0; i < n && !state.stopBatch; i++) {
+    state.batchLabel = `连续写 ${i + 1}/${n}：`
+    if (!(await writeOne('next'))) break
+  }
+  state.batchLabel = ''
+  $('batchBtn').disabled = false
+}
+$('stopBtn').onclick = () => {
+  state.stopBatch = true
+  state.writing?.abort()
+}
+
+$('saveDir').onclick = async () => {
+  const body = { tone: { tags: chipValues($('toneChips')), text: $('toneText').value } }
+  if ($('eventText').value.trim()) body.event = $('eventText').value
+  const saved = await api(`/api/stories/${state.story.id}`, { method: 'PATCH', body: JSON.stringify(body) })
+  state.story = { ...state.story, tone: saved.tone, event: saved.event }
+  $('eventText').value = ''
+  if (!state.writing) render()
+  else $('pendingEvent').replaceChildren(saved.event ? h('div', { className: 'pending', textContent: `下一段事件：${saved.event}` }) : '')
+  refresh()
+  $('dirSaved').textContent = '已保存，从下一段起生效'
+  setTimeout(() => ($('dirSaved').textContent = ''), 2500)
+}
+
+function openNewDialog(cardId) {
+  const f = $('newForm')
+  f.cardId.replaceChildren(...state.cards.map(c => h('option', { value: c.id, textContent: c.name, selected: c.id === cardId })))
+  chips($('newChips'), ['日常'])
+  f.toneText.value = ''
+  $('newDlg').showModal()
+}
+$('newDlg').onclose = async () => {
+  if ($('newDlg').returnValue !== 'ok') return
+  const f = $('newForm')
+  const story = await api('/api/stories', { method: 'POST', body: JSON.stringify({
+    cardId: f.cardId.value, style: f.style.value, userName: f.userName.value,
+    tone: { tags: chipValues($('newChips')), text: f.toneText.value },
+  }) })
+  openStory(story.id)
+}
+
+async function uploadCard(name, body) {
+  try {
+    const card = await api(`/api/cards?name=${encodeURIComponent(name)}`, { method: 'POST', body })
+    await refresh()
+    openNewDialog(card.id)
+  } catch (e) {
+    alert(e.message)
+  }
+}
+$('importBtn').onclick = () => $('fileInput').click()
+$('fileInput').onchange = e => {
+  const file = e.target.files[0]
+  e.target.value = ''
+  if (file) uploadCard(file.name, file)
+}
+$('customBtn').onclick = () => { $('customForm').reset(); $('customDlg').showModal() }
+$('customDlg').onclose = () => {
+  if ($('customDlg').returnValue !== 'ok') return
+  const data = Object.fromEntries(new FormData($('customForm')))
+  uploadCard('custom.json', JSON.stringify({ spec: 'chara_card_v2', spec_version: '2.0', data }))
+}
+
+// 对比：同一角色两条线并排，看基调把故事带向哪里
+$('compareBtn').onclick = () => {
+  state.story = null
+  render()
+  const pick = () => {
+    const sel = h('select', {}, h('option', { value: '', textContent: '选一个故事' }),
+      state.stories.map(s => h('option', { value: s.id, textContent: `${s.name} · ${s.style} · ${toneText(s.tone)} · ${s.count} 段` })))
+    const col = h('div')
+    sel.onchange = async () => {
+      if (!sel.value) return col.replaceChildren()
+      const s = await api(`/api/stories/${sel.value}`)
+      col.replaceChildren(...s.segments.map(segEl))
+    }
+    return h('div', {}, sel, col)
+  }
+  $('main').replaceChildren(h('div', { className: 'head' }, h('h2', { textContent: '对比两个故事' })), h('div', { className: 'compare' }, pick(), pick()))
+  refresh()
+}
+
+refresh()
+</script>
+</body>
+</html>

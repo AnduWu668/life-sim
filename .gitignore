@@ -1,0 +1,6 @@
+.env
+data/
+node_modules/
+# 第三方公开角色卡：本地测试用，不提交（来源见 README）
+cards/seraphina.png
+cards/lara-lightland.png
